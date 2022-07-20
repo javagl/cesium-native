@@ -1089,3 +1089,95 @@ TEST_CASE("Can load example tileset.json from 3DTILES_bounding_volume_S2 "
 
   REQUIRE(pGreatGrandchild->getChildren().empty());
 }
+
+TEST_CASE("Test implicit tileset") {
+  Cesium3DTilesSelection::registerAllTileContentTypes();
+
+  std::filesystem::path testDataPath = Cesium3DTilesSelection_TEST_DATA_DIR;
+  testDataPath = testDataPath / "SparseImplicitOctree";
+
+  // Booyah!
+  std::vector<std::string> files{
+      "tileset.json",
+      "content/content_1__0_0_0.glb",
+      "content/content_2__2_0_0.glb",
+      "content/content_2__3_1_1.glb",
+      "content/content_3__0_4_0.glb",
+      "content/content_3__1_5_1.glb",
+      "content/content_3__2_6_2.glb",
+      "content/content_3__3_7_3.glb",
+      "content/content_4__10_10_2.glb",
+      "content/content_4__11_11_3.glb",
+      "content/content_4__12_12_4.glb",
+      "content/content_4__13_13_5.glb",
+      "content/content_4__14_14_6.glb",
+      "content/content_4__15_15_7.glb",
+      "content/content_4__8_8_0.glb",
+      "content/content_4__9_9_1.glb",
+      "content/content_5__16_16_16.glb",
+      "content/content_5__17_17_17.glb",
+      "content/content_5__18_18_18.glb",
+      "content/content_5__19_19_19.glb",
+      "content/content_5__20_20_20.glb",
+      "content/content_5__21_21_21.glb",
+      "content/content_5__22_22_22.glb",
+      "content/content_5__23_23_23.glb",
+      "content/content_5__24_24_24.glb",
+      "content/content_5__25_25_25.glb",
+      "content/content_5__26_26_26.glb",
+      "content/content_5__27_27_27.glb",
+      "content/content_5__28_28_28.glb",
+      "content/content_5__29_29_29.glb",
+      "content/content_5__30_30_30.glb",
+      "content/content_5__31_31_31.glb",
+      "subtrees/0.0.0.0.subtree",
+      "subtrees/3.0.4.0.subtree",
+      "subtrees/3.1.5.1.subtree",
+      "subtrees/3.2.6.2.subtree",
+      "subtrees/3.3.7.3.subtree",
+      "subtrees/3.4.4.0.subtree",
+      "subtrees/3.4.4.4.subtree",
+      "subtrees/3.5.5.1.subtree",
+      "subtrees/3.5.5.5.subtree",
+      "subtrees/3.6.6.2.subtree",
+      "subtrees/3.6.6.6.subtree",
+      "subtrees/3.7.7.3.subtree",
+      "subtrees/3.7.7.7.subtree"};
+
+  std::map<std::string, std::shared_ptr<SimpleAssetRequest>>
+      mockCompletedRequests;
+  for (const auto& file : files) {
+    std::unique_ptr<SimpleAssetResponse> mockCompletedResponse =
+        std::make_unique<SimpleAssetResponse>(
+            static_cast<uint16_t>(200),
+            "doesn't matter",
+            CesiumAsync::HttpHeaders{},
+            readFile(testDataPath / file));
+    mockCompletedRequests.insert(
+        {file,
+         std::make_shared<SimpleAssetRequest>(
+             "GET",
+             file,
+             CesiumAsync::HttpHeaders{},
+             std::move(mockCompletedResponse))});
+  }
+
+  std::shared_ptr<SimpleAssetAccessor> mockAssetAccessor =
+      std::make_shared<SimpleAssetAccessor>(std::move(mockCompletedRequests));
+  TilesetExternals tilesetExternals{
+      mockAssetAccessor,
+      std::make_shared<SimplePrepareRendererResource>(),
+      AsyncSystem(std::make_shared<SimpleTaskProcessor>()),
+      nullptr};
+
+  // create tileset and call updateView() to give it a chance to load
+  Tileset tileset(tilesetExternals, "tileset.json");
+  initializeTileset(tileset);
+
+  // check the tiles status
+  const Tile* root = tileset.getRootTile();
+  REQUIRE(root->getState() == Tile::LoadState::ContentLoading);
+  for (const auto& child : root->getChildren()) {
+    REQUIRE(child.getState() == Tile::LoadState::Unloaded);
+  }
+}
